@@ -1614,6 +1614,8 @@
     let drawTool = 'pen';
     let drawHighlighterAlpha = 0.12;
     const HIGHLIGHTER_WIDTH_PX = 14;
+    let drawDpr = Math.max(1, window.devicePixelRatio || 1);
+    let lastPt = null;
 
     function setDrawTool(t) {
       drawTool = t === 'highlighter' ? 'highlighter' : 'pen';
@@ -1657,16 +1659,55 @@
       }
     }
 
+    function getCanvasPointFromClient(clientX, clientY) {
+      const rect = drawCanvas.getBoundingClientRect();
+      const x = (clientX - rect.left) * (drawCanvas.width / rect.width);
+      const y = (clientY - rect.top) * (drawCanvas.height / rect.height);
+      return { x, y };
+    }
+
+    function resizeDrawCanvas({ preserve = true } = {}) {
+      const rect = drawCanvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      drawDpr = dpr;
+
+      const targetW = Math.max(1, Math.round(rect.width * dpr));
+      const targetH = Math.max(1, Math.round(rect.height * dpr));
+      const sameSize = drawCanvas.width === targetW && drawCanvas.height === targetH;
+      if (sameSize) return;
+
+      let snapshot = null;
+      if (preserve && drawCanvas.width > 0 && drawCanvas.height > 0) {
+        snapshot = document.createElement('canvas');
+        snapshot.width = drawCanvas.width;
+        snapshot.height = drawCanvas.height;
+        const sctx = snapshot.getContext('2d');
+        if (sctx) sctx.drawImage(drawCanvas, 0, 0);
+      }
+
+      drawCanvas.width = targetW;
+      drawCanvas.height = targetH;
+
+      // Ensure 1 CSS px ≈ 1 unit for drawing ops.
+      // (We already convert client coords to canvas pixels via getBoundingClientRect + width/height ratio.)
+      drawCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+      if (snapshot) {
+        // Map old bitmap into the new bitmap size.
+        drawCtx.drawImage(snapshot, 0, 0, snapshot.width, snapshot.height, 0, 0, targetW, targetH);
+      }
+    }
+
     function toggleDraw() {
       drawActive = !drawActive;
       drawing = false;
+      lastPt = null;
       drawCanvas.classList.toggle('active', drawActive);
       document.getElementById('drawToolbar').classList.toggle('active', drawActive);
       document.getElementById('drawFab').classList.toggle('active-draw', drawActive);
       document.getElementById('drawFab').textContent = drawActive ? '✕' : '🖊️';
       if (drawActive) {
-        drawCanvas.width = window.innerWidth;
-        drawCanvas.height = window.innerHeight;
+        resizeDrawCanvas({ preserve: false });
       }
     }
     function setDrawColor(c, el) {
@@ -1693,51 +1734,93 @@
 
     window.addEventListener('resize', () => {
       if (!drawActive) return;
-      const prev = document.createElement('canvas');
-      prev.width = drawCanvas.width;
-      prev.height = drawCanvas.height;
-      const pctx = prev.getContext('2d');
-      if (pctx) pctx.drawImage(drawCanvas, 0, 0);
-      drawCanvas.width = window.innerWidth;
-      drawCanvas.height = window.innerHeight;
-      drawCtx.drawImage(prev, 0, 0);
+      resizeDrawCanvas({ preserve: true });
     });
 
-    drawCanvas.addEventListener('mousedown', e => {
-      drawing = true;
-      drawCtx.beginPath();
-      drawCtx.moveTo(e.clientX, e.clientY);
-    });
-    drawCanvas.addEventListener('mousemove', e => {
-      if (!drawing) return;
+    function applyDrawStyle() {
       drawCtx.strokeStyle = drawColor;
       drawCtx.globalAlpha = drawTool === 'highlighter' ? drawHighlighterAlpha : 1;
       drawCtx.lineWidth = drawTool === 'highlighter' ? HIGHLIGHTER_WIDTH_PX : drawLineWidth;
       drawCtx.lineCap = 'round';
       drawCtx.lineJoin = 'round';
-      drawCtx.lineTo(e.clientX, e.clientY);
-      drawCtx.stroke();
-    });
-    drawCanvas.addEventListener('mouseup', () => drawing = false);
-    drawCanvas.addEventListener('mouseleave', () => drawing = false);
-    drawCanvas.addEventListener('touchstart', e => {
-      e.preventDefault();
-      drawing = true;
-      drawCtx.beginPath();
-      drawCtx.moveTo(e.touches[0].clientX, e.touches[0].clientY);
-    }, { passive: false });
-    drawCanvas.addEventListener('touchmove', e => {
-      e.preventDefault();
-      if (!drawing) return;
-      drawCtx.strokeStyle = drawColor;
-      drawCtx.globalAlpha = drawTool === 'highlighter' ? drawHighlighterAlpha : 1;
-      drawCtx.lineWidth = drawTool === 'highlighter' ? HIGHLIGHTER_WIDTH_PX : drawLineWidth;
-      drawCtx.lineCap = 'round';
-      drawCtx.lineJoin = 'round';
-      drawCtx.lineTo(e.touches[0].clientX, e.touches[0].clientY);
-      drawCtx.stroke();
-    }, { passive: false });
-    drawCanvas.addEventListener('touchend', () => drawing = false);
+    }
+
+    function drawTo(clientX, clientY, { start = false } = {}) {
+      const pt = getCanvasPointFromClient(clientX, clientY);
+      if (start || !lastPt) {
+        drawCtx.beginPath();
+        drawCtx.moveTo(pt.x, pt.y);
+      } else {
+        drawCtx.lineTo(pt.x, pt.y);
+        drawCtx.stroke();
+      }
+      lastPt = pt;
+    }
+
+    // Prefer Pointer Events for consistent mouse/touch/pencil behavior.
+    if (window.PointerEvent) {
+      drawCanvas.addEventListener('pointerdown', (e) => {
+        if (!drawActive) return;
+        e.preventDefault();
+        resizeDrawCanvas({ preserve: true });
+        drawCanvas.setPointerCapture?.(e.pointerId);
+        drawing = true;
+        lastPt = null;
+        applyDrawStyle();
+        drawTo(e.clientX, e.clientY, { start: true });
+      });
+      drawCanvas.addEventListener('pointermove', (e) => {
+        if (!drawActive || !drawing) return;
+        e.preventDefault();
+        applyDrawStyle();
+        drawTo(e.clientX, e.clientY);
+      });
+      const end = (e) => {
+        if (!drawActive) return;
+        e.preventDefault();
+        drawing = false;
+        lastPt = null;
+      };
+      drawCanvas.addEventListener('pointerup', end);
+      drawCanvas.addEventListener('pointercancel', end);
+      drawCanvas.addEventListener('pointerleave', end);
+    } else {
+      // Fallback (older browsers): keep touch/mouse logic with proper coordinate mapping.
+      drawCanvas.addEventListener('mousedown', (e) => {
+        if (!drawActive) return;
+        resizeDrawCanvas({ preserve: true });
+        drawing = true;
+        lastPt = null;
+        applyDrawStyle();
+        drawTo(e.clientX, e.clientY, { start: true });
+      });
+      drawCanvas.addEventListener('mousemove', (e) => {
+        if (!drawActive || !drawing) return;
+        applyDrawStyle();
+        drawTo(e.clientX, e.clientY);
+      });
+      drawCanvas.addEventListener('mouseup', () => { drawing = false; lastPt = null; });
+      drawCanvas.addEventListener('mouseleave', () => { drawing = false; lastPt = null; });
+      drawCanvas.addEventListener('touchstart', (e) => {
+        if (!drawActive) return;
+        e.preventDefault();
+        resizeDrawCanvas({ preserve: true });
+        drawing = true;
+        lastPt = null;
+        applyDrawStyle();
+        const t = e.touches[0];
+        if (t) drawTo(t.clientX, t.clientY, { start: true });
+      }, { passive: false });
+      drawCanvas.addEventListener('touchmove', (e) => {
+        if (!drawActive || !drawing) return;
+        e.preventDefault();
+        applyDrawStyle();
+        const t = e.touches[0];
+        if (t) drawTo(t.clientX, t.clientY);
+      }, { passive: false });
+      drawCanvas.addEventListener('touchend', () => { drawing = false; lastPt = null; });
+      drawCanvas.addEventListener('touchcancel', () => { drawing = false; lastPt = null; });
+    }
   </script>
 </body>
 </html>
