@@ -1620,6 +1620,7 @@
     const drawCanvas = document.getElementById('drawCanvas');
     const drawCtx = drawCanvas.getContext('2d');
     let drawActive = false, drawing = false;
+    let drawToolbarOpen = false;
     let drawColor = '#fff', drawLineWidth = 3;
     let drawTool = 'pen';
     let drawHighlighterAlpha = 0.12;
@@ -1709,16 +1710,21 @@
     }
 
     function toggleDraw() {
-      drawActive = !drawActive;
-      drawing = false;
-      lastPt = null;
-      drawCanvas.classList.toggle('active', drawActive);
-      document.getElementById('drawToolbar').classList.toggle('active', drawActive);
-      document.getElementById('drawFab').classList.toggle('active-draw', drawActive);
-      document.getElementById('drawFab').textContent = drawActive ? '✕' : '🖊️';
-      if (drawActive) {
+      // UX: tapping the button should collapse/expand the toolbar without disabling drawing.
+      if (!drawActive) {
+        drawActive = true;
+        drawToolbarOpen = true;
+        drawing = false;
+        lastPt = null;
+        drawCanvas.classList.add('active');
         resizeDrawCanvas({ preserve: false });
+      } else {
+        drawToolbarOpen = !drawToolbarOpen;
       }
+
+      document.getElementById('drawToolbar').classList.toggle('active', drawToolbarOpen);
+      document.getElementById('drawFab').classList.toggle('active-draw', drawActive);
+      document.getElementById('drawFab').textContent = drawToolbarOpen ? '✕' : '🖊️';
     }
     function setDrawColor(c, el) {
       drawColor = c;
