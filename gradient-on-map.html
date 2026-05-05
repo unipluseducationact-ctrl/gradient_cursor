@@ -1733,6 +1733,17 @@
     }
     function clearDraw() {
       drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+
+      // Clearing should also exit drawing mode so the rest of the UI works normally.
+      drawActive = false;
+      drawToolbarOpen = false;
+      drawing = false;
+      lastPt = null;
+      drawCanvas.classList.remove('active');
+      document.getElementById('drawToolbar').classList.remove('active');
+      const fab = document.getElementById('drawFab');
+      fab.classList.remove('active-draw');
+      fab.textContent = '🖊️';
     }
 
     const drawWidthEl = document.getElementById('drawWidth');
