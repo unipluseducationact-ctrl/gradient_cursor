@@ -1252,9 +1252,17 @@
         const thStr = fmt(c.thetaDeg, 2);
         let result = "";
         if (isFinite(c.gradient) && c.horizontal > 0) {
-          result =
-            `tan θ = AB ÷ BC = ${fmt(c.vertical, 0)} ÷ ${fmt(c.horizontal, 2)} = ${gradStr} → θ = ${thStr}°` +
-            (ratioStr !== "—" ? ` &nbsp;|&nbsp; rise : run = ${ratioStr}` : "");
+          const ab = fmt(c.vertical, 0);
+          const bc = fmt(c.horizontal, 2);
+          result = [
+            `gradient = AB ÷ BC`,
+            `= ${ab} ÷ ${bc} = ${gradStr}`,
+            `tan θ = ${gradStr}`,
+            `θ = ${thStr}°`,
+          ].map((line) => `<div>${line}</div>`).join("");
+          if (ratioStr !== "—") {
+            result += `<div style="margin-top:0.35rem;color:#475569;font-weight:600">rise : run = ${ratioStr}</div>`;
+          }
         } else {
           result = "Set a positive map length and scale so BC &gt; 0 to compute gradient and θ.";
         }
