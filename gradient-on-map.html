@@ -245,6 +245,16 @@
     #drawCanvas.active {
       pointer-events: auto;
       opacity: 1;
+      /* iPad / Safari: avoid text selection and long-press taking over slow strokes */
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    body.draw-mode-active {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
     }
     #drawFab {
       position: fixed;
@@ -1677,6 +1687,18 @@
       return { x, y };
     }
 
+    function syncDrawModeBodyClass() {
+      document.body.classList.toggle('draw-mode-active', drawActive);
+    }
+
+    document.addEventListener(
+      'selectstart',
+      (e) => {
+        if (drawActive) e.preventDefault();
+      },
+      true
+    );
+
     function resizeDrawCanvas({ preserve = true } = {}) {
       const rect = drawCanvas.getBoundingClientRect();
       const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -1725,6 +1747,7 @@
       document.getElementById('drawToolbar').classList.toggle('active', drawToolbarOpen);
       document.getElementById('drawFab').classList.toggle('active-draw', drawActive);
       document.getElementById('drawFab').textContent = drawToolbarOpen ? '✕' : '🖊️';
+      syncDrawModeBodyClass();
     }
     function setDrawColor(c, el) {
       drawColor = c;
@@ -1744,6 +1767,7 @@
       const fab = document.getElementById('drawFab');
       fab.classList.remove('active-draw');
       fab.textContent = '🖊️';
+      syncDrawModeBodyClass();
     }
 
     const drawWidthEl = document.getElementById('drawWidth');
@@ -1804,13 +1828,13 @@
       });
       const end = (e) => {
         if (!drawActive) return;
-        e.preventDefault();
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
         drawing = false;
         lastPt = null;
       };
       drawCanvas.addEventListener('pointerup', end);
       drawCanvas.addEventListener('pointercancel', end);
-      drawCanvas.addEventListener('pointerleave', end);
+      /* Do not end stroke on pointerleave: iPadOS often fires leave at edges during drawing. */
     } else {
       // Fallback (older browsers): keep touch/mouse logic with proper coordinate mapping.
       drawCanvas.addEventListener('mousedown', (e) => {
