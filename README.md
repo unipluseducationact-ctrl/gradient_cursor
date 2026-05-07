@@ -4,7 +4,7 @@ An interactive, single-file HTML demo that visualizes map contours and a gradien
 
 ## Run locally
 
-- Open `gradient-on-map.html` in your browser.
+- Open `index.html` in your browser.
 
 ## Notes
 
