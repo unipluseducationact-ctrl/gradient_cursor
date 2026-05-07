@@ -363,6 +363,7 @@
             <ellipse cx="275" cy="205" rx="112" ry="85" fill="#e2e8f0" />
             <ellipse cx="278" cy="202" rx="72" ry="55" fill="#f1f5f9" />
             <ellipse cx="280" cy="200" rx="38" ry="28" fill="#f8fafc" />
+            <ellipse cx="282" cy="198" rx="19" ry="14" fill="#ffffff" />
           </g>
 
           <g id="contours" fill="none" stroke="var(--contour)" stroke-width="1.8" stroke-linejoin="round">
@@ -371,6 +372,7 @@
             <path id="ring-2" class="contour-ring" d="M272 124 C345 124 398 172 398 214 C398 256 345 298 272 298 C199 298 146 256 146 214 C146 172 199 124 272 124 Z" />
             <path id="ring-3" class="contour-ring" d="M274 152 C328 152 368 186 368 216 C368 246 328 276 274 276 C220 276 180 246 180 216 C180 186 220 152 274 152 Z" />
             <path id="ring-4" class="contour-ring" d="M276 178 C310 178 338 198 338 218 C338 238 310 256 276 256 C242 256 214 238 214 218 C214 198 242 178 276 178 Z" />
+            <path id="ring-5" class="contour-ring" d="M277 202 C292 202 304 209 304 218 C304 227 292 234 277 234 C262 234 250 227 250 218 C250 209 262 202 277 202 Z" />
           </g>
 
           <g id="contour-labels" font-size="12" fill="#0f172a" font-weight="700"></g>
@@ -547,7 +549,6 @@
       gsap.registerPlugin(MotionPathPlugin);
     }
 
-    const MAX_RINGS = 5;
     const mapSvg = document.getElementById("map-svg");
     const lineAB = document.getElementById("line-ab");
     const ptA = document.getElementById("pt-a");
@@ -688,6 +689,7 @@
 
     const HIGHEST_K_MIN = 2;
     const HIGHEST_K_MAX = 5;
+    const MAX_RINGS = HIGHEST_K_MAX + 1;
 
     function clamp(n, lo, hi) {
       return Math.min(hi, Math.max(lo, n));
