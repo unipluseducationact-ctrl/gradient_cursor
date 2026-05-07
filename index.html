@@ -643,6 +643,41 @@
     let abFxTl = null;
     let mapRulerPinned = false;
 
+    function clientPointToMapSvg(clientX, clientY) {
+      if (!mapSvg) return null;
+      // Prefer CTM inversion (most accurate; accounts for CSS transforms and page scaling).
+      try {
+        const ctm = mapSvg.getScreenCTM?.();
+        if (ctm && typeof DOMPoint === "function" && typeof ctm.inverse === "function") {
+          const p = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
+          if (isFinite(p.x) && isFinite(p.y)) return { x: p.x, y: p.y };
+        }
+      } catch {
+        // Fall through to rect/viewBox mapping.
+      }
+      // Fallback: map client coords into viewBox via bounding rect.
+      const rect = mapSvg.getBoundingClientRect?.();
+      const vb = mapSvg.viewBox?.baseVal;
+      if (!rect || !vb || rect.width <= 0 || rect.height <= 0) return null;
+      const nx = (clientX - rect.left) / rect.width;
+      const ny = (clientY - rect.top) / rect.height;
+      return { x: vb.x + nx * vb.width, y: vb.y + ny * vb.height };
+    }
+
+    function distPointToSegment(px, py, ax, ay, bx, by) {
+      const abx = bx - ax;
+      const aby = by - ay;
+      const apx = px - ax;
+      const apy = py - ay;
+      const abLen2 = abx * abx + aby * aby;
+      if (abLen2 <= 1e-9) return Math.hypot(apx, apy);
+      let t = (apx * abx + apy * aby) / abLen2;
+      t = Math.max(0, Math.min(1, t));
+      const cx = ax + t * abx;
+      const cy = ay + t * aby;
+      return Math.hypot(px - cx, py - cy);
+    }
+
     function syncABHitTarget() {
       if (!lineAB || !lineABHit) return;
       lineABHit.setAttribute("x1", lineAB.getAttribute("x1") || "0");
@@ -678,6 +713,13 @@
         rulerGroup.setAttribute("opacity", "0");
         mapCallout.setAttribute("opacity", "0");
       }
+    }
+
+    function togglePinnedMapRuler() {
+      killAnim();
+      mapRulerPinned = !mapRulerPinned;
+      if (mapRulerPinned) showPinnedMapRuler();
+      else hidePinnedMapRuler();
     }
 
     function getContourLabelEl(levelNumber) {
@@ -1664,14 +1706,32 @@
     }
 
     function bindMapABToggle() {
-      const target = lineABHit || lineAB;
-      if (!target) return;
-      target.addEventListener("click", () => {
-        // Spec: clicking AB should stop animations and toggle pinned ruler.
-        killAnim();
-        mapRulerPinned = !mapRulerPinned;
-        if (mapRulerPinned) showPinnedMapRuler();
-        else hidePinnedMapRuler();
+      // Do not rely on SVG pointer-events for hit-testing (can be unreliable across browsers).
+      // Instead, listen on the map SVG and hit-test against the AB segment in SVG coords.
+      if (!mapSvg || !lineAB) return;
+
+      const HIT_PX = 12; // SVG px within which a click counts as “on AB”.
+
+      mapSvg.addEventListener("pointerdown", (e) => {
+        // Only respond to primary pointer/button.
+        if (e && typeof e.button === "number" && e.button !== 0) return;
+        if (!e || typeof e.clientX !== "number" || typeof e.clientY !== "number") return;
+
+        const p = clientPointToMapSvg(e.clientX, e.clientY);
+        if (!p) return;
+
+        const ax = +lineAB.getAttribute("x1");
+        const ay = +lineAB.getAttribute("y1");
+        const bx = +lineAB.getAttribute("x2");
+        const by = +lineAB.getAttribute("y2");
+        if (![ax, ay, bx, by].every(isFinite)) return;
+
+        const d = distPointToSegment(p.x, p.y, ax, ay, bx, by);
+        if (d > HIT_PX) return;
+
+        e.preventDefault?.();
+        e.stopPropagation?.();
+        togglePinnedMapRuler();
       });
     }
 
