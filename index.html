@@ -155,12 +155,11 @@
       pointer-events: stroke;
     }
     #line-ab-hit {
-      /* Use a near-transparent stroke so click hit-testing works reliably in SVG. */
-      stroke: rgba(0,0,0,0.001);
+      stroke: transparent;
       stroke-width: 18;
       fill: transparent;
       cursor: pointer;
-      pointer-events: all;
+      pointer-events: stroke;
     }
     #hit-theta {
       pointer-events: all;
