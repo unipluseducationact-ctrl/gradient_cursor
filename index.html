@@ -40,7 +40,8 @@
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
+      /* Prioritize the visuals (top row) while keeping Inputs/Calculations usable. */
+      grid-template-rows: 1.35fr 0.65fr;
       gap: var(--gap);
       width: 100%;
       max-width: none;
@@ -57,7 +58,7 @@
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 10px;
+      padding: 9px;
       box-shadow: 0 2px 8px rgba(0,0,0,.06);
       display: flex;
       flex-direction: column;
@@ -68,7 +69,7 @@
       text-transform: uppercase;
       letter-spacing: 0.06em;
       color: var(--muted);
-      margin: 0 0 0.5rem;
+      margin: 0 0 0.35rem;
     }
     .svg-wrap {
       width: 100%;
@@ -125,7 +126,9 @@
     button.secondary { background: #e2e8f0; color: var(--text); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     .calc {
-      font-size: 0.95rem;
+      font-size: clamp(1.02rem, 0.85rem + 0.7vw, 1.2rem);
+      line-height: 1.5;
+      min-height: 0;
     }
     .calc .line {
       margin: 0.35rem 0;
@@ -159,7 +162,7 @@
     #lbl-vertical, #lbl-horizontal, #lbl-hyp { pointer-events: none; }
     .calc-empty {
       color: var(--muted);
-      font-size: 0.9rem;
+      font-size: 0.95em;
       padding: 1rem;
       text-align: center;
       border: 1px dashed var(--border);
@@ -189,14 +192,39 @@
     }
     .calc-card .card-desc {
       color: var(--muted);
-      font-size: 0.88rem;
+      font-size: 0.95em;
       margin: 0.25rem 0 0.6rem;
+    }
+    .calc-card .card-section {
+      margin-top: 0.55rem;
+    }
+    .calc-card .section-title {
+      font-weight: 800;
+      font-size: 0.92em;
+      color: #0f172a;
+      margin: 0 0 0.25rem;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+    .calc-card .formula-list,
+    .calc-card .step-list {
+      margin: 0.25rem 0 0;
+      padding-left: 1.15rem;
+    }
+    .calc-card .formula-list li,
+    .calc-card .step-list li {
+      margin: 0.22rem 0;
     }
     .calc-card .card-formula {
       font-family: "Cambria Math", "Times New Roman", serif;
-      margin: 0.25rem 0;
-      font-size: 0.92rem;
+      margin: 0.15rem 0;
+      font-size: clamp(1.03rem, 0.88rem + 0.65vw, 1.25rem);
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
+    .calc-card .step-list .card-formula { font-family: "Segoe UI", system-ui, sans-serif; }
     .calc-card .card-result {
       background: #fff;
       border: 1px solid var(--border);
@@ -204,6 +232,19 @@
       padding: 0.4rem 0.55rem;
       margin-top: 0.4rem;
       font-weight: 700;
+      font-size: clamp(1.05rem, 0.9rem + 0.7vw, 1.28rem);
+      line-height: 1.35;
+    }
+    #calc-detail {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding-right: 4px; /* breathing room against scrollbar */
+    }
+    #calc-anim {
+      max-height: 40%;
+      overflow: auto;
+      padding-right: 4px;
     }
     @keyframes cardIn {
       from { opacity: 0; transform: translateY(4px); }
@@ -1222,15 +1263,23 @@
         title: "AB — Vertical distance",
           desc: "Difference between the highest contour (A) and the lowest contour (B).",
           formulas: ["AB = (highest contour at A) − (lowest contour at B)"],
-          result: `${fmt(a, 0)} − ${fmt(b, 0)} = ${fmt(signed, 0)} m`,
+          steps: [`AB = ${fmt(a, 0)} − ${fmt(b, 0)}`],
+          result: `${fmt(signed, 0)} m`,
         };
       },
       BC: (c, s) => ({
         color: "#2563eb",
         title: "BC — Horizontal distance",
         desc: "Measured map length scaled to ground distance.",
-        formulas: [`BC = map length × scale = ${fmt(s.mapLenCm, 2)} cm × ${s.scaleN}`],
-        result: `${fmt(s.mapLenCm, 2)} × ${s.scaleN} ÷ 100 = ${fmt(c.horizontal, 2)} m`,
+        formulas: [
+          "BC = map length × scale",
+          "Convert cm to m: ÷ 100",
+        ],
+        steps: [
+          `BC = ${fmt(s.mapLenCm, 2)} cm × ${s.scaleN}`,
+          `BC = (${fmt(s.mapLenCm, 2)} × ${s.scaleN}) ÷ 100`,
+        ],
+        result: `${fmt(c.horizontal, 2)} m`,
       }),
       AC: (c, s) => {
         const v = c.vertical;
@@ -1241,12 +1290,15 @@
         const cosT = Math.cos(thRad);
         const viaSin = sinT > 1e-10 ? v / sinT : NaN;
         const viaCos = cosT > 1e-10 ? h / cosT : NaN;
-        let result = `√(${fmt(v, 0)}² + ${fmt(h, 2)}²) = ${fmt(acLen, 2)} m`;
+        const steps = [
+          `AC = √(AB² + BC²)`,
+          `AC = √(${fmt(v, 0)}² + ${fmt(h, 2)}²)`,
+        ];
         if (isFinite(viaSin)) {
-          result += `<div style="margin-top:0.35rem;font-weight:600">AB ÷ sin θ = ${fmt(v, 0)} ÷ ${fmt(sinT, 6)} ≈ ${fmt(viaSin, 2)} m</div>`;
+          steps.push(`AC = AB ÷ sin θ = ${fmt(v, 0)} ÷ ${fmt(sinT, 6)} ≈ ${fmt(viaSin, 2)}`);
         }
         if (isFinite(viaCos)) {
-          result += `<div style="margin-top:0.35rem;font-weight:600">BC ÷ cos θ = ${fmt(h, 2)} ÷ ${fmt(cosT, 6)} ≈ ${fmt(viaCos, 2)} m</div>`;
+          steps.push(`AC = BC ÷ cos θ = ${fmt(h, 2)} ÷ ${fmt(cosT, 6)} ≈ ${fmt(viaCos, 2)}`);
         }
         return {
           color: "#0f172a",
@@ -1257,34 +1309,37 @@
             "AC = AB ÷ sin θ",
             "AC = BC ÷ cos θ",
           ],
-          result,
+          steps,
+          result: `${fmt(acLen, 2)} m`,
         };
       },
       theta: (c, s) => {
         const ratioStr = simplifiedGradientRatio(c.vertical, c.horizontal);
         const gradStr = isFinite(c.gradient) ? fmt(c.gradient, 6) : "—";
         const thStr = fmt(c.thetaDeg, 2);
+        let steps = [];
         let result = "";
         if (isFinite(c.gradient) && c.horizontal > 0) {
           const ab = fmt(c.vertical, 0);
           const bc = fmt(c.horizontal, 2);
-          result = [
-            `gradient = AB ÷ BC`,
-            `= ${ab} ÷ ${bc} = ${gradStr}`,
-            `tan θ = ${gradStr}`,
-            `θ = ${thStr}°`,
-          ].map((line) => `<div>${line}</div>`).join("");
-          if (ratioStr !== "—") {
-            result += `<div style="margin-top:0.35rem;color:#475569;font-weight:600">rise : run = ${ratioStr}</div>`;
-          }
+          steps = [
+            "gradient = AB ÷ BC",
+            `gradient = ${ab} ÷ ${bc} = ${gradStr}`,
+            `tan θ = gradient = ${gradStr}`,
+            `θ = arctan(gradient) = ${thStr}°`,
+          ];
+          if (ratioStr !== "—") steps.push(`rise : run = ${ratioStr}`);
+          result = `${thStr}°`;
         } else {
-          result = "Set a positive map length and scale so BC &gt; 0 to compute gradient and θ.";
+          steps = ["Set a positive map length and scale so BC > 0 to compute gradient and θ."];
+          result = "—";
         }
         return {
           color: "#7c3aed",
           title: "θ — Inclination angle",
           desc: "Steepness of AC; gradient = tan θ.",
           formulas: ["gradient = tan θ = AB ÷ BC"],
+          steps,
           result,
         };
       },
@@ -1302,12 +1357,34 @@
         return;
       }
       const card = builder(c, s);
-      const formulasHtml = card.formulas.map((f) => `<div class="card-formula">${f}</div>`).join("");
+      const hasFormulas = Array.isArray(card.formulas) && card.formulas.length > 0;
+      const hasSteps = Array.isArray(card.steps) && card.steps.length > 0;
+
+      const formulasHtml = hasFormulas
+        ? `
+          <div class="card-section">
+            <div class="section-title">Formulas</div>
+            <ul class="formula-list">
+              ${card.formulas.map((f) => `<li><div class="card-formula">${f}</div></li>`).join("")}
+            </ul>
+          </div>`
+        : "";
+
+      const stepsHtml = hasSteps
+        ? `
+          <div class="card-section">
+            <div class="section-title">Working</div>
+            <ul class="step-list">
+              ${card.steps.map((t) => `<li><div class="card-formula">${t}</div></li>`).join("")}
+            </ul>
+          </div>`
+        : "";
       calcDetail.innerHTML = `
         <div class="calc-card" style="--card-color:${card.color}">
           <div class="card-title"><span class="card-swatch" aria-hidden="true"></span>${card.title}</div>
           <p class="card-desc">${card.desc}</p>
           ${formulasHtml}
+          ${stepsHtml}
           <div class="card-result">${card.result}</div>
         </div>`;
     }
