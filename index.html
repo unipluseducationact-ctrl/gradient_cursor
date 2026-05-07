@@ -146,6 +146,13 @@
       cursor: pointer;
       pointer-events: stroke;
     }
+    #line-ab-hit {
+      stroke: transparent;
+      stroke-width: 18;
+      fill: transparent;
+      cursor: pointer;
+      pointer-events: stroke;
+    }
     #hit-theta {
       pointer-events: all;
       stroke: transparent;
@@ -419,6 +426,7 @@
           <g id="contour-labels" font-size="12" fill="#0f172a" font-weight="700"></g>
 
           <line id="line-ab" x1="118" y1="248" x2="292" y2="168" stroke="#0f172a" stroke-width="2" stroke-linecap="round" />
+          <line id="line-ab-hit" x1="118" y1="248" x2="292" y2="168" />
 
           <g id="pt-b" transform="translate(118,248)">
             <line x1="-6" y1="-6" x2="6" y2="6" stroke="#b91c1c" stroke-width="2" />
@@ -592,6 +600,7 @@
 
     const mapSvg = document.getElementById("map-svg");
     const lineAB = document.getElementById("line-ab");
+    const lineABHit = document.getElementById("line-ab-hit");
     const ptA = document.getElementById("pt-a");
     const rulerGroup = document.getElementById("ruler-group");
     const rulerRot = document.getElementById("ruler-rot");
@@ -631,6 +640,44 @@
 
     let selectedEl = null;
     let abFxTl = null;
+    let mapRulerPinned = false;
+
+    function syncABHitTarget() {
+      if (!lineAB || !lineABHit) return;
+      lineABHit.setAttribute("x1", lineAB.getAttribute("x1") || "0");
+      lineABHit.setAttribute("y1", lineAB.getAttribute("y1") || "0");
+      lineABHit.setAttribute("x2", lineAB.getAttribute("x2") || "0");
+      lineABHit.setAttribute("y2", lineAB.getAttribute("y2") || "0");
+    }
+
+    function showPinnedMapRuler() {
+      const s = readState();
+      // Ensure geometry & ruler transform are up to date.
+      render();
+      const ml = fmt(s.mapLenCm, 2);
+      buildMapCallout("Length of AB on map ≈ " + ml + " cm");
+      lineAB.setAttribute("stroke-dasharray", "8 4");
+      lineAB.setAttribute("stroke-dashoffset", "0");
+      if (typeof gsap !== "undefined") {
+        gsap.set(rulerGroup, { opacity: 1 });
+        gsap.set(mapCallout, { opacity: 1 });
+      } else {
+        rulerGroup.setAttribute("opacity", "1");
+        mapCallout.setAttribute("opacity", "1");
+      }
+    }
+
+    function hidePinnedMapRuler() {
+      lineAB.setAttribute("stroke-dasharray", "");
+      lineAB.setAttribute("stroke-dashoffset", "");
+      if (typeof gsap !== "undefined") {
+        gsap.set(rulerGroup, { opacity: 0 });
+        gsap.set(mapCallout, { opacity: 0 });
+      } else {
+        rulerGroup.setAttribute("opacity", "0");
+        mapCallout.setAttribute("opacity", "0");
+      }
+    }
 
     function getContourLabelEl(levelNumber) {
       if (!contourLabelG || !isFinite(levelNumber)) return null;
@@ -1477,6 +1524,21 @@
       warningEl.textContent = c.warnings.join(" ");
       applySelectionClasses();
       positionRuler();
+      syncABHitTarget();
+
+      if (mapRulerPinned) {
+        const ml = fmt(s.mapLenCm, 2);
+        buildMapCallout("Length of AB on map ≈ " + ml + " cm");
+        lineAB.setAttribute("stroke-dasharray", "8 4");
+        lineAB.setAttribute("stroke-dashoffset", "0");
+        if (typeof gsap !== "undefined") {
+          gsap.set(rulerGroup, { opacity: 1 });
+          gsap.set(mapCallout, { opacity: 1 });
+        } else {
+          rulerGroup.setAttribute("opacity", "1");
+          mapCallout.setAttribute("opacity", "1");
+        }
+      }
 
       return { s, c };
     }
@@ -1600,6 +1662,18 @@
       mainTl = tl;
     }
 
+    function bindMapABToggle() {
+      const target = lineABHit || lineAB;
+      if (!target) return;
+      target.addEventListener("click", () => {
+        // Spec: clicking AB should stop animations and toggle pinned ruler.
+        killAnim();
+        mapRulerPinned = !mapRulerPinned;
+        if (mapRulerPinned) showPinnedMapRuler();
+        else hidePinnedMapRuler();
+      });
+    }
+
     function runAnimation() {
       killAnim();
       const { s, c } = render();
@@ -1690,6 +1764,7 @@
     btnReset.addEventListener("click", () => {
       killAnim();
       selectedEl = null;
+      mapRulerPinned = false;
       inputs.lowest.value = 50;
       inputs.highest.value = 250;
       inputs.interval.value = 50;
@@ -1701,6 +1776,7 @@
 
     if (btnAnimate) btnAnimate.addEventListener("click", runAnimation);
     bindTriangleHits();
+    bindMapABToggle();
     render();
 
     // ─────────────────────────────────────────────
